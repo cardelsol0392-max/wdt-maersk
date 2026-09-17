@@ -136,7 +136,18 @@ tr:hover td{background:#fafafa}
     <!-- CAPTURA -->
     <div class="section active" id="capture">
       <div class="pt">Captura de contenedor</div>
-      <div class="ps">Campos de identificación obligatorios *. Los tiempos se completan conforme avanza la operación.</div>
+      <div class="ps">Busca primero si el contenedor ya existe — si no, llena el formulario para registrarlo.</div>
+
+      <!-- BUSCADOR RÁPIDO -->
+      <div class="sc" style="background:#e6f1fb;border-color:#b3d4f0">
+        <h3 style="color:#185fa5">🔍 Buscar contenedor existente</h3>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px"><input type="text" id="quickSearch" placeholder="Escribe el número de contenedor... ej. CMAU1234567" style="width:100%;padding:9px 12px;border:1px solid #b3d4f0;border-radius:8px;font-size:13px;font-family:inherit;text-transform:uppercase" oninput="quickSearchHandler()"></div>
+          <button class="btn btn-secondary" onclick="document.getElementById('quickSearch').value='';document.getElementById('quickSearchResult').style.display='none'">Limpiar</button>
+        </div>
+        <div id="quickSearchResult" style="display:none;margin-top:14px"></div>
+      </div>
+
       <div class="sc">
         <h3>1 — Identificación y logística *</h3>
         <div class="fr">
@@ -488,6 +499,51 @@ function updateBadge(){
 }
 
 // ==================== SAVE CONTAINER ====================
+function quickSearchHandler(){
+  const q=(document.getElementById('quickSearch').value||'').trim().toUpperCase();
+  const res=document.getElementById('quickSearchResult');
+  if(q.length<3){res.style.display='none';return;}
+  const found=localData.filter(c=>(c.contenedor||'').includes(q));
+  if(!found.length){
+    res.style.display='block';
+    res.innerHTML=`<div style="color:#854f0b;font-size:13px">⚠️ No se encontró ningún contenedor con "<strong>${q}</strong>". Puedes registrarlo abajo.</div>`;
+    return;
+  }
+  const campos=[
+    {f:'llegadaTerminal',l:'Llegada terminal'},{f:'ingresoTerminal',l:'Ingreso terminal'},
+    {f:'salidaTerminal',l:'Salida terminal'},{f:'llegadaDestino',l:'Llegada destino'},
+    {f:'inicioDescarga',l:'Inicio descarga'},{f:'terminoDescarga',l:'Término descarga'},
+    {f:'salidaDestino',l:'Salida vacío'},{f:'arriboVacio',l:'Arribo terminal'},
+  ];
+  res.style.display='block';
+  res.innerHTML=found.map(c=>{
+    const llenos=campos.filter(f=>c[f.f]);
+    const faltantes=campos.filter(f=>!c[f.f]);
+    const pct=Math.round(llenos.length/campos.length*100);
+    const otd=c.cita&&c.llegadaDestino?(new Date(c.llegadaDestino)<=new Date(c.cita)?'<span class="badge bg">A tiempo</span>':'<span class="badge br">Tardío</span>'):'<span class="badge bx">Sin dato</span>';
+    return`<div style="background:#fff;border:1px solid #b3d4f0;border-radius:10px;padding:14px 16px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <div>
+          <div style="font-size:16px;font-weight:700">${c.contenedor} ${isCompleto(c)?'✅':''}</div>
+          <div style="font-size:11px;color:#888;margin-top:2px">${c.tipo||''} · ${c.destino||''} · ECO: ${c.eco||'—'} · ${c.transporte||'—'}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openEdit('${c.id}')">Actualizar tiempos</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:10px">
+        <div style="font-size:12px"><span style="color:#888">Cita rampa:</span> ${fmtDt(c.cita)}</div>
+        <div style="font-size:12px"><span style="color:#888">OTD:</span> ${otd}</div>
+        <div style="font-size:12px"><span style="color:#888">Estatus:</span> <strong>${c.estatus||'Sin iniciar'}</strong></div>
+        <div style="font-size:12px"><span style="color:#888">Rampa:</span> ${c.rampa||'—'}</div>
+      </div>
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:#888">Progreso de tiempos</span><span style="font-weight:600">${pct}%</span></div>
+        <div class="pb-wrap"><div class="pb-fill" style="width:${pct}%;background:${pct===100?'#639922':pct>=50?'#ef9f27':'#e24b4a'}"></div></div>
+      </div>
+      ${faltantes.length?`<div style="font-size:11px;color:#854f0b">⏳ Pendiente: ${faltantes.map(f=>f.l).join(' · ')}</div>`:'<div style="font-size:11px;color:#3b6d11">✅ Todos los tiempos capturados</div>'}
+    </div>`;
+  }).join('');
+}
+
 function validateCreate(){
   const req=[['f_contenedor','Contenedor'],['f_pin','PIN'],['f_pedimento','Pedimento'],['f_tipo','Tipo de contenedor'],['f_cita','Cita en rampa'],['f_destino','Destino / CEDIS'],['f_ecochasis','Eco Chasis'],['f_transporte','Transporte'],['f_eco','ECO unidad'],['f_operador','Operador']];
   for(const[id,label]of req){if(!document.getElementById(id).value.trim()){alert(`Campo obligatorio: "${label}"`);document.getElementById(id).focus();return false;}}
