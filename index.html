@@ -814,9 +814,39 @@ function printPDF(){const c=document.getElementById('pdfContent').innerHTML;cons
 
 // ==================== ADMIN ====================
 function renderAdmin(){
-  document.getElementById('userList').innerHTML=getUsers().map((u,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,.07)"><div><span style="font-weight:600;font-size:13px">${u.user}</span><span class="badge ${u.role==='admin'?'bb':u.role==='supervisor'?'ba':'bx'}" style="margin-left:8px">${u.role}</span></div>${u.user!==currentUser.user?`<button class="btn btn-danger btn-sm" onclick="removeUser(${i})">Eliminar</button>`:'<span style="font-size:11px;color:#aaa">Tú</span>'}</div>`).join('');
+  document.getElementById('userList').innerHTML=getUsers().map((u,i)=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid rgba(0,0,0,.07);flex-wrap:wrap;gap:8px">
+      <div><span style="font-weight:600;font-size:13px">${u.user}</span><span class="badge ${u.role==='admin'?'bb':u.role==='supervisor'?'ba':'bx'}" style="margin-left:8px">${u.role}</span></div>
+      <div style="display:flex;gap:8px">
+        ${u.user!==currentUser.user?`
+          <button class="btn btn-secondary btn-sm" onclick="openEditUser(${i})">Editar PIN</button>
+          <button class="btn btn-danger btn-sm" onclick="removeUser(${i})">Eliminar</button>
+        `:'<span style="font-size:11px;color:#aaa">Tú</span>'}
+      </div>
+    </div>`).join('');
 }
 function openAddUser(){document.getElementById('addUserModal').classList.add('open')}
+function openEditUser(i){
+  const u=getUsers()[i];
+  document.getElementById('editUserIdx').value=i;
+  document.getElementById('editUserName').textContent=u.user;
+  document.getElementById('editUserRole').value=u.role;
+  document.getElementById('editUserPin').value='';
+  document.getElementById('editUserModal').classList.add('open');
+}
+function saveEditUser(){
+  const i=+document.getElementById('editUserIdx').value;
+  const pin=document.getElementById('editUserPin').value.trim();
+  const role=document.getElementById('editUserRole').value;
+  if(!pin||pin.length<4){alert('El PIN debe tener mínimo 4 dígitos.');return;}
+  const users=getUsers();
+  users[i].pin=pin;
+  users[i].role=role;
+  saveUsers(users);
+  closeModal('editUserModal');
+  renderAdmin();
+  alert('✓ Usuario actualizado correctamente.');
+}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 function addUser(){const u=document.getElementById('newUser').value.trim().toLowerCase();const p=document.getElementById('newPin').value.trim();const r=document.getElementById('newRole').value;if(!u||!p||p.length<4){alert('Usuario y PIN (mín. 4 dígitos) requeridos.');return}const users=getUsers();if(users.find(x=>x.user===u)){alert('El usuario ya existe.');return}users.push({user:u,pin:p,role:r});saveUsers(users);closeModal('addUserModal');renderAdmin();}
 function removeUser(i){if(!confirm('¿Eliminar?'))return;const u=getUsers();u.splice(i,1);saveUsers(u);renderAdmin();}
