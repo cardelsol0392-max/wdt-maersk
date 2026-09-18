@@ -129,6 +129,7 @@ tr:hover td{background:#fafafa}
     <button class="nav-btn" id="navDashboard" onclick="showSection('dashboard')">Dashboard</button>
     <button class="nav-btn" id="navContainers" onclick="showSection('containers')">Contenedores</button>
     <button class="nav-btn" id="navVendors" onclick="showSection('vendors')">Scorecard Vendors</button>
+    <button class="nav-btn" id="navBulk" onclick="showSection('bulk')">Carga Masiva 📤</button>
     <button class="nav-btn" id="navAdmin" style="display:none" onclick="showSection('admin')">Admin</button>
   </div>
   <div class="content">
@@ -257,6 +258,41 @@ tr:hover td{background:#fafafa}
       <div style="background:#e6f1fb;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#185fa5">Verde ≥ 90% | Amarillo 70–89% | Rojo &lt; 70% | Descarga: Verde &lt; 2h, Rojo &gt; 3h</div>
       <div class="tw" id="vendorTable"></div>
       <div id="pdfWrap" style="margin-top:24px;display:none"></div>
+    </div>
+
+    <!-- BULK -->
+    <div class="section" id="bulk">
+      <div class="pt">Carga masiva</div>
+      <div class="ps">Para días de 150+ contenedores — descarga la plantilla, llénala y súbela de una sola vez.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:20px">
+        <div class="sc">
+          <h3>Paso 1 — Descarga la plantilla</h3>
+          <p style="font-size:12px;color:#888;margin-bottom:8px;line-height:1.6">Incluye todas las columnas en el orden correcto. Los tiempos son opcionales — déjalos vacíos y se actualizan después.</p>
+          <div style="background:#eaf3de;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#3b6d11">
+            ✅ Campos obligatorios: Contenedor, PIN, Pedimento, Tipo, Cita, Destino, EcoChasis, Transporte, ECO, Operador
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="downloadTemplate()">⬇️ Descargar plantilla .csv</button>
+        </div>
+        <div class="sc">
+          <h3>Paso 2 — Sube tu archivo lleno</h3>
+          <p style="font-size:12px;color:#888;margin-bottom:14px;line-height:1.6">Acepta .xlsx o .csv. Antes de importar verás un resumen con errores detectados para que los corrijas.</p>
+          <label style="display:block;text-align:center;padding:14px;border:2px dashed #b3d4f0;border-radius:8px;cursor:pointer;font-size:13px;color:#185fa5;background:#f0f7ff">
+            <input type="file" id="bulkFile" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleBulkFile(this)">
+            📂 Seleccionar archivo (.xlsx / .csv)
+          </label>
+        </div>
+      </div>
+      <div id="bulkPreview" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+          <span style="font-weight:600;font-size:14px" id="bulkSummary"></span>
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-secondary" onclick="cancelBulk()">Cancelar</button>
+            <button class="btn btn-primary" id="bulkImportBtn" onclick="confirmBulkImport()">✅ Confirmar e importar</button>
+          </div>
+        </div>
+        <div id="bulkErrors" style="display:none;background:#fcebeb;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;color:#a32d2d"></div>
+        <div class="tw" id="bulkTable"></div>
+      </div>
     </div>
 
     <!-- ADMIN -->
@@ -458,11 +494,12 @@ function showSection(id){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  const m={capture:'navCapture',pendientes:'navPendientes',dashboard:'navDashboard',containers:'navContainers',vendors:'navVendors',admin:'navAdmin'};
+      const m={capture:'navCapture',pendientes:'navPendientes',dashboard:'navDashboard',containers:'navContainers',vendors:'navVendors',bulk:'navBulk',admin:'navAdmin'};
   if(m[id])document.getElementById(m[id]).classList.add('active');
   if(id==='dashboard')renderDashboard();
   if(id==='containers')renderSearch();
   if(id==='vendors')renderVendors();
+  if(id==='bulk'){}
   if(id==='admin')renderAdmin();
   if(id==='pendientes')renderPendientes();
 }
@@ -811,6 +848,86 @@ function showPDF(vendor){
   wrap.scrollIntoView({behavior:'smooth'});
 }
 function printPDF(){const c=document.getElementById('pdfContent').innerHTML;const w=window.open('','_blank');w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Vendor Scorecard — Maersk</title><style>body{font-family:system-ui,sans-serif;padding:28px;max-width:800px;margin:0 auto}</style></head><body>${c}</body></html>`);w.document.close();setTimeout(()=>w.print(),500);}
+
+// ==================== BULK ====================
+const BULK_COLS=['contenedor','pin','pedimento','tipo','cita','destino','ecochasis','transporte','eco','operador','llegadaTerminal','ingresoTerminal','salidaTerminal','llegadaDestino','rampa','inicioDescarga','terminoDescarga','salidaDestino','arriboVacio','docTrafico'];
+const BULK_LABELS={contenedor:'Contenedor',pin:'PIN',pedimento:'Pedimento',tipo:'Tipo Contenedor',cita:'Cita Rampa',destino:'Destino',ecochasis:'Eco Chasis',transporte:'Transporte',eco:'ECO',operador:'Operador',llegadaTerminal:'Llegada Terminal',ingresoTerminal:'Ingreso Terminal',salidaTerminal:'Salida Terminal',llegadaDestino:'Llegada Destino',rampa:'Rampa',inicioDescarga:'Inicio Descarga',terminoDescarga:'Termino Descarga',salidaDestino:'Salida Destino',arriboVacio:'Arribo Vacio',docTrafico:'Doc Trafico WM'};
+const BULK_REQ=['contenedor','pin','pedimento','tipo','cita','destino','ecochasis','transporte','eco','operador'];
+let bulkParsed=[];
+
+function downloadTemplate(){
+  const h=BULK_COLS.map(c=>BULK_LABELS[c]);
+  const ex=['CMAU1234567','PIN-001','3241100XXXXX',"40' Seco",'2026-09-18 08:00','IDC (Nave 7)','CH-1234','Especializados Sagot','T-0892','Juan Pérez','','','','','','','','','',''];
+  const blob=new Blob([[h.join(','),ex.join(',')].join('\n')],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='plantilla_WDT_Walmart.csv';a.click();
+}
+
+function handleBulkFile(input){
+  const file=input.files[0];if(!file)return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(ext==='csv'){const r=new FileReader();r.onload=e=>parseBulkCSV(e.target.result);r.readAsText(file,'UTF-8');}
+  else{loadSheetJS(()=>{const r=new FileReader();r.onload=e=>{const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];parseBulkRows(XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:'yyyy-mm-dd hh:mm'}));};r.readAsArrayBuffer(file);});}
+}
+function loadSheetJS(cb){if(window.XLSX){cb();return;}const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=cb;document.head.appendChild(s);}
+function parseBulkCSV(text){parseBulkRows(text.split(/\r?\n/).filter(l=>l.trim()).map(l=>l.split(',').map(c=>c.trim().replace(/^"|"$/g,''))));}
+
+function parseBulkRows(rows){
+  if(rows.length<2){alert('El archivo está vacío o no tiene datos.');return;}
+  const header=rows[0].map(h=>h.trim());
+  const cm={};
+  BULK_COLS.forEach(c=>{const idx=header.findIndex(h=>h.toLowerCase()===BULK_LABELS[c].toLowerCase()||h.toLowerCase()===c.toLowerCase());if(idx>=0)cm[c]=idx;});
+  const miss=BULK_REQ.filter(c=>cm[c]===undefined);
+  if(miss.length){alert('Columnas obligatorias faltantes:\n'+miss.map(c=>BULK_LABELS[c]).join(', '));return;}
+  const records=[],errors=[];
+  for(let i=1;i<rows.length;i++){
+    const row=rows[i];if(!row||row.every(c=>!c))continue;
+    const rec={id:'WDT'+Date.now()+i,fecha:new Date().toISOString(),capturedBy:currentUser.user};
+    BULK_COLS.forEach(c=>{rec[c]=cm[c]!==undefined?(row[cm[c]]||'').trim():'';});
+    rec.contenedor=rec.contenedor.toUpperCase();rec.eco=rec.eco.toUpperCase();
+    rec.docTrafico=['si','yes','1','true'].includes((rec.docTrafico||'').toLowerCase());
+    const errs=[];
+    BULK_REQ.forEach(c=>{if(!rec[c])errs.push(BULK_LABELS[c]+' vacío');});
+    const chrono=[['llegadaTerminal','ingresoTerminal'],['ingresoTerminal','salidaTerminal'],['salidaTerminal','llegadaDestino'],['llegadaDestino','inicioDescarga'],['inicioDescarga','terminoDescarga'],['terminoDescarga','salidaDestino'],['salidaDestino','arriboVacio']];
+    for(const[a,b]of chrono){if(rec[a]&&rec[b]&&dt(rec[b])<=dt(rec[a]))errs.push(`${BULK_LABELS[b]} ≤ ${BULK_LABELS[a]}`);}
+    rec.estatus=getEstatus(rec);rec._rowNum=i+1;rec._errors=errs;
+    if(errs.length)errors.push({row:i+1,errs});
+    records.push(rec);
+  }
+  bulkParsed=records;
+  const valid=records.filter(r=>!r._errors.length);
+  document.getElementById('bulkPreview').style.display='block';
+  document.getElementById('bulkSummary').textContent=`${records.length} filas encontradas — ${valid.length} válidas, ${records.length-valid.length} con errores`;
+  document.getElementById('bulkImportBtn').disabled=valid.length===0;
+  const ed=document.getElementById('bulkErrors');
+  if(errors.length){ed.style.display='block';ed.innerHTML='<strong>Filas con errores (no se importarán):</strong><br>'+errors.map(e=>`Fila ${e.row}: ${e.errs.join(', ')}`).join('<br>');}else{ed.style.display='none';}
+  document.getElementById('bulkTable').innerHTML=`<table><thead><tr><th>Fila</th><th>Contenedor</th><th>CEDIS</th><th>Transporte</th><th>Cita</th><th>Estatus auto</th><th>Validación</th></tr></thead>
+  <tbody>${records.map(r=>`<tr style="${r._errors.length?'background:#fff8f8':''}">
+    <td style="font-size:11px;color:#aaa">${r._rowNum}</td>
+    <td><strong style="font-weight:600">${r.contenedor||'—'}</strong></td>
+    <td>${r.destino||'—'}</td><td>${r.transporte||'—'}</td>
+    <td style="font-size:11px">${fmtDt(r.cita)}</td>
+    <td style="font-size:11px">${r.estatus}</td>
+    <td>${r._errors.length?`<span class="badge br">${r._errors.length} error(es)</span>`:'<span class="badge bg">✅ OK</span>'}</td>
+  </tr>`).join('')}</tbody></table>`;
+}
+
+async function confirmBulkImport(){
+  const valid=bulkParsed.filter(r=>!r._errors.length);
+  if(!valid.length){alert('No hay filas válidas para importar.');return;}
+  showSaving(true);
+  let ok=0,fail=0;
+  for(const rec of valid){
+    const clean={...rec};delete clean._errors;delete clean._rowNum;
+    try{await appendToSheet(clean);localData.push(clean);ok++;}catch{fail++;}
+  }
+  showSaving(false);
+  cancelBulk();
+  document.getElementById('bulkFile').value='';
+  updateAll();
+  alert(`✅ Importación completada:\n• ${ok} contenedores guardados en Google Sheets${fail>0?`\n• ${fail} fallaron (intenta de nuevo)`:''}`);;
+  showSection('pendientes');
+}
+function cancelBulk(){bulkParsed=[];document.getElementById('bulkPreview').style.display='none';}
 
 // ==================== ADMIN ====================
 function renderAdmin(){
